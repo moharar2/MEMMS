@@ -340,7 +340,7 @@ class PreventiveView(QWidget):
             for p in plans:
                 new_s = pm_service.generate_schedules_for_plan(db, p.id)
                 count += len(new_s)
-        QMessageBox.information(self, tr("common.success"), f"Generated {count} new PM schedule tasks.")
+        QMessageBox.information(self, tr("common.success"), f"تم توليد {count} مهمة فحص صيانة وقائية جديدة بنجاح.")
         self.refresh_data()
 
     def _open_execute_dialog(self, schedule_id: int):
@@ -352,19 +352,22 @@ class PreventiveView(QWidget):
         with get_db() as db:
             exec_rec = db.query(PMExecution).filter(PMExecution.pm_schedule_id == schedule_id).first()
             if not exec_rec:
-                QMessageBox.information(self, tr("common.details"), "No execution record details available.")
+                QMessageBox.information(self, tr("common.details"), "لا توجد تفاصيل فحص مسجلة لهذه المهمة بعد.")
                 return
 
-            tech_name = exec_rec.technician.full_name if exec_rec.technician else "N/A"
-            res = "PASSED" if exec_rec.passed else "FAILED"
+            tech_name = exec_rec.technician.full_name if exec_rec.technician else "غير محدد"
+            res = "ناجح ومطابق للمعاير" if exec_rec.passed else "غير مطابق / يحتاج متابعة"
+            summary_txt = exec_rec.results_summary or "—"
+            measurements_txt = str(exec_rec.measurements) if exec_rec.measurements else "—"
+            next_date_txt = str(exec_rec.next_due_date) if exec_rec.next_due_date else "—"
             msg = (
-                f"PM Inspection Details\n\n"
-                f"Inspection Date: {exec_rec.execution_date.strftime('%Y-%m-%d %H:%M')}\n"
-                f"Technician: {tech_name}\n"
-                f"Result: {res}\n"
-                f"Summary: {exec_rec.results_summary}\n"
-                f"Measurements: {exec_rec.measurements}\n"
-                f"Next Due Date: {exec_rec.next_due_date}"
+                f"تفاصيل محضر الفحص الوقائي والمعايرة\n\n"
+                f"تاريخ الفحص والتنفيذ: {exec_rec.execution_date.strftime('%Y-%m-%d %H:%M')}\n"
+                f"المهندس / الفني المنفذ: {tech_name}\n"
+                f"النتيجة الإجمالية: {res}\n"
+                f"ملخص النتائج والملاحظات: {summary_txt}\n"
+                f"قراءات القياس والمعايرة: {measurements_txt}\n"
+                f"تاريخ الفحص الدوري القادم: {next_date_txt}"
             )
             QMessageBox.information(self, tr("pm.view_execution"), msg)
 

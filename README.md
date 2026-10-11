@@ -1,167 +1,131 @@
 # MEMMS — Medical Equipment Maintenance Management System
+# نظام إدارة صيانة الأجهزة الطبية
 
-**Phase 2: Foundation + Equipment Registry**
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![GUI](https://img.shields.io/badge/GUI-PySide6%20(Qt6)-green.svg)](https://doc.qt.io/qtforpython/)
+[![Database](https://img.shields.io/badge/Database-SQLite%20%2F%20SQLAlchemy%202.x-orange.svg)](https://www.sqlalchemy.org/)
+[![UI](https://img.shields.io/badge/UI-Arabic%20RTL%20Medical%20Aesthetic-teal.svg)](#)
 
-A desktop application for tracking medical devices and maintenance inside
-hospitals. This phase delivers the foundational code only — a working
-window, bilingual UI, dark-navy sidebar, and a live dashboard. Equipment registry CRUD is now included; work orders, spare parts, and other modules remain for later phases.
+مشروع تطبيقي متكامل لإدارة وهندسة صيانة الأجهزة الطبية بالمستشفيات والمراكز التخصصية، مطبق بنموذج واقعي مغذى ببيانات **«هيئة مستشفى الثورة العام النموذجي — صنعاء»**.
 
-> Phase 1 is **not** production-ready. Do not deploy it in a clinical
-> setting.
+النظام مصمم خصيصاً لتلبية متطلبات أقسام الهندسة الطبية الحيوية (Biomedical Engineering) وفق المعايير القياسية لإدارة دورة حياة الأجهزة والامتثال لاشتراطات الجودة والسلامة الإكلينيكية.
 
 ---
 
-## 1. Tech Stack
+## 1. الوحدات والوظائف المكتملة في النظام
 
-| Layer | Choice |
+| الوحدة الوظيفية | الوصف الهندسي والإجرائي |
 |---|---|
-| Language | Python 3.10+ |
-| GUI | PySide6 (Qt for Python) |
-| Database | SQLite (file under `data/`) |
-| ORM | SQLAlchemy 2.x |
-| Future DB | PostgreSQL (drop-in swap) |
-| Target OS | Windows (Linux/macOS also work) |
+| **لوحة التحكم والمؤشرات (Dashboard)** | لوحة متابعة تنفيذية تلخص مؤشر جاهزية الأسطول الطبي، ومعدل الامتثال للصيانة الوقائية، والبلاغات الطارئة، ونواقص المستودع مع تنقل سريع. |
+| **سجل الأجهزة الطبية (Equipment Registry)** | حصر شامل للأصول الطبية، تصنيف الخطورة الإكلينيكية (Criticality/Risk)، تتبع الملحقات والقطع التابعة، محاضر الاستلام والتعميد، وتاريخ النقل بين الأقسام. |
+| **أوامر الصيانة وبلاغات الأعطال (Work Orders)** | دورة حياة كاملة لبلاغات الأعطال الطارئة: تحديد الأولويات، تكليف المهندس/الفني، توثيق التشخيص الفني والإجراءات التصحيحية، واستهلاك قطع الغيار وحساب التكلفة الإجمالية. |
+| **الصيانة الوقائية والمعايرة (Preventive Maintenance)** | إدارة بروتوكولات الفحص الدوري (Checklists)، جدولة مهام المعايرة الدورية، التحديث التلقائي للمهام المتأخرة (Overdue)، وتوثيق محاضر الفحص ونسب الامتثال. |
+| **مستودع قطع الغيار (Spare Parts & Inventory)** | بطاقة الصنف والمواصفات وموقع التخزين (Storage Bin)، مستويات إعادة الطلب (Reorder Level)، وتسجيل حركات الإدخال والصرف والتسوية مع التنبيه التلقائي بالنواقص. |
+| **عقود الصيانة والضمان (Contracts & Warranty)** | متابعة عقود الصيانة الشاملة واتفاقيات مستوى الخدمة (SLA) مع الوكلاء المعتمدين، وفترات سريان الضمان المصنعي، وتنبيهات العقود التي توشك على الانتهاء. |
+| **الكادر الفني والهندسي (Biomedical Technicians)** | إدارة الملفات المهنية لمهندسي وفنيي الأجهزة الطبية، المؤهلات الأكاديمية والشهادات، الخبرات السابقة، وسجلات الرواتب المحمية بالصلاحيات. |
+| **الشركات المصنعة والوكلاء (Vendors & Agents)** | دليل الشركات المصنعة العالمية، الوكلاء المعتمدون في صنعاء، مهندسو الدعم الفني الميداني، وحماية تمنع حذف المورد المرتبط بأجهزة أو عقود نشطة. |
+| **التقارير التنفيذية والتحليلية (Reports Engine)** | استخراج تقارير تخصصية (حسب الشركة، الوكيل، القسم، الضمان، وفترات الصيانة) مع تصدير فوري إلى **Excel (xlsx)** و **CSV** و **PDF** و **HTML** بقوالب عربية منسقة. |
+| **الأمان وإدارة الصلاحيات (RBAC & Security)** | مصادقة مشفرة بـ Bcrypt، مصفوفة صلاحيات وظيفية (Admin, Biomedical Engineer, Technician, Viewer)، وسجل رقابة وتدقيق كامل (Audit Trail). |
+| **النسخ الاحتياطي وإدارة النظام (System Backup)** | نسخ احتياطي حي لقاعدة البيانات مع مراقبة الحجم وحفظ النسخ في `data/backups/`. |
 
 ---
 
-## 2. Project Structure
+## 2. الهيكلية المعمارية للمشروع
+
+يتبع المشروع معمارية الطبقات المنفصلة (Clean Layered Architecture):
 
 ```
 MEMMS/
-├── main.py                # Entry point
-├── database.py            # Engine + session factory + init_db()
-├── models.py              # SQLAlchemy 2.x declarative models
-├── requirements.txt
-├── README.md
-├── .gitignore
-├── data/
-│   └── memms.db           # (auto-created on first run, never committed)
-└── app/
-    ├── __init__.py
-    ├── main_window.py     # QMainWindow, sidebar, page stack
-    ├── dashboard.py       # 3 live stat cards
-    ├── pages.py           # Placeholder pages for future phases
-    ├── translations.py    # AR/EN strings + Translator (RTL/LTR)
-    └── styles.py          # QSS stylesheet (colors, spacing)
+├── main.py                       # نقطة الدخول الرئيسية للتطبيق
+├── config.py                     # إعدادات النظام ومسارات التخزين والبيئة
+├── requirements.txt              # مكتبات واعتماديات المشروع
+├── pytest.ini                    # ضبط بيئة الاختبارات التلقائية
+├── MEMMS.spec                    # مواصفات بناء الحزمة التنفيذية (PyInstaller)
+├── build_exe.py                  # سكريبت بناء الملف التنفيذي المستقل
+├── data/                         # مجلد البيانات المحلي (قاعدة البيانات، المرفقات، النسخ الاحتياطية)
+│   ├── memms.db                  # قاعدة بيانات SQLite الرئيسية
+│   ├── backups/                  # أرشيف النسخ الاحتياطية
+│   └── attachments/              # أدلة تشغيل الأجهزة ومستندات PDF
+├── src/                          # الكود المصدري الفعلي للنظام
+│   ├── core/                     # إدارة الجلسات وقاعدة البيانات والترجمة والصلاحيات
+│   ├── models/                   # نماذج الجداول والعلاقات (SQLAlchemy Declarative Models)
+│   ├── services/                 # طبقة منطق الأعمال والعمليات (Business Logic Layer)
+│   ├── repositories/             # مستودعات البيانات والاستعلامات المخصصة
+│   └── ui/                       # الواجهة الرسومية (PySide6)
+│       ├── login_window.py       # نافذة تسجيل الدخول والمصادقة
+│       ├── main_window.py        # النافذة الرئيسية والتنقل (Sidebar & Stack)
+│       ├── components/           # المكونات القابلة لإعادة الاستخدام (Cards, Tables, Badges)
+│       ├── theme/                # إدارة الأنماط والمظهر والأيقونات المتجهة
+│       └── views/                # شاشات ونوافذ النظام الـ 13 ونوافذ الحوار المتخصصة
+├── tests/                        # حزمة الاختبارات الآلية (51 اختبار فحص متكامل)
+└── archive/                      # أرشيف الإصدارات القديمة السابقة
 ```
-
-> The `app/` package is a small extension to the layout shown in the
-> brief. UI code is kept out of the project root so the files a beginner
-> edits most (`main.py`, `database.py`, `models.py`) stay small.
 
 ---
 
-## 3. Setup on Windows + VS Code
+## 3. متطلبات التثبيت والتشغيل
 
-### 3.1 Create a virtual environment
-
-Open a terminal (PowerShell or the VS Code integrated terminal) **inside
-the MEMMS project folder**, then run:
+### 3.1 إنشاء البيئة الافتراضية
+افتح موجه الأوامر (PowerShell أو Terminal) داخل مجلد المشروع:
 
 ```powershell
+# إنشاء البيئة الافتراضية
 python -m venv .venv
+
+# تفعيل البيئة (Windows PowerShell)
 .\.venv\Scripts\Activate.ps1
+
+# أو على Command Prompt (cmd)
+.\.venv\Scripts\activate.bat
 ```
 
-If PowerShell blocks the activation script, run this once and try again:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
-
-On Command Prompt (cmd.exe) use:
-
-```cmd
-python -m venv .venv
-.venv\Scripts\activate.bat
-```
-
-### 3.2 Install dependencies
-
+### 3.2 تثبيت الاعتماديات
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3.3 Run the app
-
+### 3.3 تشغيل التطبيق
 ```powershell
 python main.py
 ```
 
-On first run, MEMMS creates `data/memms.db` and all tables. The window
-opens in Arabic (RTL) by default.
+---
+
+## 4. بيانات تسجيل الدخول التجريبية (Demo Credentials)
+
+عند أول تشغيل، يقوم النظام تلقائياً بتهيئة الجداول وضمان وجود حساب المدير الرئيسي:
+
+| نوع الحساب | اسم المستخدم (Username) | كلمة المرور (Password) | الصلاحيات |
+|---|---|---|---|
+| **مدير النظام الرئيسي** | `admin` | `Admin@123456` | كامل الصلاحيات الإدارية والفنية والمالية |
 
 ---
 
-## 4. What Works
+## 5. تشغيل الاختبارات الآلية (Automated Testing)
 
-- ✅ MEMMS-branded main window with a dark-navy sidebar.
-- ✅ Sidebar navigation with 8 sections.
-- ✅ Live dashboard: three stat cards backed by real SQL counts.
-- ✅ Language switch (Arabic ↔ English) with full RTL ↔ LTR flip.
-- ✅ Re-translation of every visible label on switch.
-- ✅ Equipment registry: add, list, search, edit, and delete records.
-- ✅ Equipment form validation and duplicate asset-code handling.
-- ✅ Placeholder pages for sections that ship in later phases.
-- ✅ SQLite database created automatically on first launch.
-- ✅ Money fields use `Numeric` + `Decimal` (no float arithmetic).
-- ✅ Unique constraints on `hospital_code`, `order_number`, `part_number`.
+يحتوي المشروع على حزمة اختبارات شاملة تضم **51 اختباراً**:
 
-## 5. What is Deferred to Later Phases
+```powershell
+# تشغيل كامل حزمة الاختبارات
+pytest
 
-- CRUD screens for Equipment, Work Orders, Spare Parts, Staff, etc.
-- Preventive maintenance scheduler logic.
-- PDF and Excel reports.
-- Authentication and permissions.
-- Network multi-user mode (PostgreSQL migration is scaffolded but not
-  executed in Phase 1).
+# تشغيل الاختبارات مع إظهار تفاصيل كل اختبار
+pytest -v
+```
 
 ---
 
-## 6. Manual Test Checklist
+## 6. بناء ملف تنفيذي مستقل (Standalone .EXE)
 
-Run these after `python main.py` opens the window.
+لبناء البرنامج كملف تنفيذي يعمل على بيئة Windows دون الحاجة لتثبيت بايثون:
 
-1. **Dashboard shows zeros.** Cards read `—` if the DB is empty; they
-   update as soon as records exist.
-2. **Open VS Code's SQLite viewer** (or any external tool) and insert a
-   row into `equipment`, `work_orders`, and `staff` — then click the
-   **تحديث / Refresh** button in the top bar. The three cards should
-   jump to the new counts.
-3. **Click the language button** (top right). All labels switch between
-   Arabic and English, and the layout flips between RTL and LTR
-   (sidebar moves to the right in RTL, to the left in LTR).
-4. **Click each sidebar entry.** Dashboard is real; the other seven
-   sections show a clear placeholder page — buttons are not dead.
-5. **Quit and relaunch.** The DB persists in `data/memms.db`.
+```powershell
+python build_exe.py
+```
+سيتم إنشاء البرنامج المستقل داخل المجلد `dist/MEMMS/MEMMS.exe`.
 
 ---
 
-## 7. Common Errors and Fixes
-
-| Error | Cause | Fix |
-|---|---|---|
-| `ModuleNotFoundError: No module named 'PySide6'` | Dependencies not installed in the active venv | `pip install -r requirements.txt` |
-| `qt.qpa.plugin: Could not find the Qt platform plugin "windows"` | Missing Visual C++ runtime on Windows | Install [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) |
-| Arabic text shows as squares | System font lacks Arabic glyphs | Windows ships `Segoe UI` and `Tahoma` which both support Arabic. Check the OS language pack. |
-| `sqlite3.OperationalError: database is locked` | Another process holds the DB | Close any external SQLite viewer, then retry |
-| Layout looks broken after switching language | Sidebar / content side-effect | Click the language button once more — the direction flip is idempotent |
-
----
-
-## 8. Project Conventions
-
-- Money is stored as `Numeric(12, 2)` and read into Python `Decimal`.
-- Every translatable string goes in `app/translations.py` under a stable
-  key, never inline in widgets.
-- Database access uses the `with get_session() as session:` pattern.
-  Sessions always close, even on exceptions.
-- All models use the SQLAlchemy 2.x `Mapped[...]` style.
-
----
-
-## 9. License
-
-This is a college project. Use it freely for learning; do not deploy it
-in a real hospital.
+## 7. الترخيص وطبيعة العمل
+هذا النظام تم تطويره كـ **مشروع جامعي لمقرر إدارة الصيانة الطبية (MEMMS)** لأغراض المحاكاة والتعليم والتدريب الأكاديمي على نظم صيانة الأجهزة الطبية بالمستشفيات.

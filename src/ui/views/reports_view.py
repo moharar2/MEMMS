@@ -152,6 +152,7 @@ class ReportsView(QWidget):
         self.report_type_combo.addItem("تقرير الأجهزة الشامل حسب القسم", "department_summary")
         self.report_type_combo.addItem("تقرير متابعة عقود الضمان وانتهاء الصلاحية", "warranty")
         self.report_type_combo.addItem("تقرير ملخص أعمال الصيانة والتكاليف", "periodic_maintenance")
+        self.report_type_combo.addItem("تقرير السجل الفني وتاريخ صيانة جهاز محدد", "equipment_history")
         self.report_type_combo.currentIndexChanged.connect(self._on_report_type_changed)
         type_layout.addWidget(self.report_type_lbl)
         type_layout.addWidget(self.report_type_combo)
@@ -350,6 +351,18 @@ class ReportsView(QWidget):
             self.dynamic_combo.setVisible(True)
             self.dynamic_combo.addItem("جميع قطع الغيار", "all")
             self.dynamic_combo.addItem("القطع قاربت على النفاد فقط", "low_stock")
+        elif rtype == "equipment_history":
+            self.dynamic_filter_lbl.setText("الجهاز الطبي المطلوب:")
+            self.dynamic_filter_lbl.setVisible(True)
+            self.dynamic_combo.setVisible(True)
+            try:
+                with get_db() as db:
+                    eqs = db.query(Equipment).order_by(Equipment.id.asc()).all()
+                for eq in eqs:
+                    label = f"{eq.asset_number} — {eq.name_ar or eq.name_en}"
+                    self.dynamic_combo.addItem(label, eq.id)
+            except Exception as e:
+                print(f"Error loading equipment list in reports: {e}")
         else:
             self.dynamic_filter_lbl.setVisible(False)
             self.dynamic_combo.setVisible(False)
@@ -486,6 +499,24 @@ class ReportsView(QWidget):
                 self.stat_card_4.set_title("القسم الطبي")
                 self.stat_card_4.set_value(self.dept_combo.currentText())
 
+            elif rtype == "equipment_history":
+                eq_id = extra_val if isinstance(extra_val, int) else None
+                if not eq_id and self.dynamic_combo.count() > 0:
+                    eq_id = self.dynamic_combo.itemData(0)
+                if eq_id:
+                    data = report_service.get_equipment_history_report_data(db, equipment_id=eq_id)
+                    summary = data.get("summary", {})
+                    self.stat_card_1.set_title("إجمالي أوامر الصيانة")
+                    self.stat_card_1.set_value(f"{summary.get('total_orders', 0):,}")
+                    self.stat_card_2.set_title("البلاغات المكتملة")
+                    self.stat_card_2.set_value(f"{summary.get('completed_orders', 0):,}")
+                    self.stat_card_3.set_title("إجمالي تكلفة الصيانة")
+                    self.stat_card_3.set_value(f"{summary.get('total_maint_cost', 0):,.2f} ر.س")
+                    self.stat_card_4.set_title("نسبة الصيانة للشراء")
+                    self.stat_card_4.set_value(f"{summary.get('cost_ratio', 0):.1f}%")
+                else:
+                    data = {"title": "تقرير صيانة الجهاز", "headers": [], "column_keys": [], "rows": [], "summary": {}}
+
             else:  # periodic_maintenance
                 data = report_service.get_periodic_maintenance_report_data(
                     db, from_date=from_d, to_date=to_d, department_id=dept_id
@@ -607,10 +638,9 @@ class ReportsView(QWidget):
 
             def _paint_preview(target_printer):
                 doc = QTextDocument()
-                doc.setDefaultFont(QFont("Segoe UI", 9))
                 paint_rect = target_printer.pageLayout().paintRectPixels(target_printer.resolution())
                 doc.setPageSize(QSizeF(paint_rect.width(), paint_rect.height()))
-                doc.setHtml(html)
+                report_service.prepare_rtl_document(doc, html, font_size=9)
                 doc.print_(target_printer)
 
             preview = QPrintPreviewDialog(printer, self)
@@ -667,9 +697,8 @@ class ReportsView(QWidget):
 
             paint_rect = writer.pageLayout().paintRectPixels(writer.resolution())
             doc = QTextDocument()
-            doc.setDefaultFont(QFont("Segoe UI", 10))
             doc.setPageSize(QSizeF(paint_rect.width(), paint_rect.height()))
-            doc.setHtml(html)
+            report_service.prepare_rtl_document(doc, html, font_size=10)
             doc.print_(writer)
 
             QMessageBox.information(

@@ -90,7 +90,9 @@ class VendorsView(QWidget):
             type_map = {
                 "manufacturer": "شركة مصنعة",
                 "supplier": "مورد معتمد",
+                "agent": "وكيل معتمد وموزع",
                 "service_agent": "وكيل صيانة وخدمة",
+                "service_provider": "مزود خدمات وصيانة",
                 "both": "مصنع ومورد"
             }
 

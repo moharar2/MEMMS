@@ -6,10 +6,13 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox,
     QPushButton, QLabel, QTableWidgetItem, QMessageBox, QFrame, QHeaderView
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSizeF, QMarginsF
+from PySide6.QtGui import QTextDocument, QPageSize, QPageLayout, QFont
+from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from src.core.i18n import tr
 from src.core.database import get_db
 from src.services.work_order_service import work_order_service
+from src.services.report_service import report_service
 from src.ui.theme.icons import icon
 from src.ui.components.status_badge import StatusBadge
 from src.ui.components.data_table import DataTable
@@ -186,14 +189,19 @@ class WorkOrdersView(QWidget):
                 it_date.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 tbl.setItem(row_idx, 8, it_date)
 
-                # Actions (Edit)
+                # Actions (Edit, Print Ticket)
                 edit_btn = ActionButton(
                     action_type="edit",
                     tooltip="تعديل وتحديث أمر الصيانة",
                     callback=lambda _, w_id=wo.id: self._on_edit(w_id)
                 )
+                print_btn = ActionButton(
+                    action_type="print",
+                    tooltip="طباعة وتصدير تذكرة أمر الصيانة",
+                    callback=lambda _, w_id=wo.id: self._on_print_ticket(w_id)
+                )
 
-                actions_widget = create_actions_cell(edit_btn)
+                actions_widget = create_actions_cell(edit_btn, print_btn)
                 tbl.setCellWidget(row_idx, 9, actions_widget)
 
             self.table_widget.set_record_count(len(orders), len(orders))
@@ -211,6 +219,37 @@ class WorkOrdersView(QWidget):
             dlg = WorkOrderDialog(work_order=wo, parent=self)
             if dlg.exec() == WorkOrderDialog.DialogCode.Accepted:
                 self.load_data()
+
+    def _on_print_ticket(self, wo_id: int):
+        try:
+            with get_db() as db:
+                data = report_service.get_work_order_ticket_data(db, wo_id)
+            if not data:
+                QMessageBox.warning(self, "تنبيه", "تعذر جلب بيانات أمر الصيانة.")
+                return
+
+            html = report_service.generate_work_order_ticket_html(data)
+
+            printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
+            printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+            printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+            printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout.Unit.Millimeter)
+
+            def _paint_preview(target_printer):
+                doc = QTextDocument()
+                paint_rect = target_printer.pageLayout().paintRectPixels(target_printer.resolution())
+                doc.setPageSize(QSizeF(paint_rect.width(), paint_rect.height()))
+                report_service.prepare_rtl_document(doc, html, font_size=9)
+                doc.print_(target_printer)
+
+            preview = QPrintPreviewDialog(printer, self)
+            wo_num = data.get("work_order", {}).get("number", str(wo_id))
+            preview.setWindowTitle(f"تذكرة أمر صيانة رقم {wo_num} — هيئة مستشفى الثورة")
+            preview.resize(1000, 780)
+            preview.paintRequested.connect(_paint_preview)
+            preview.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ في الطباعة", f"فشل فتح تذكرة أمر الصيانة: {str(e)}")
 
     def retranslate_ui(self):
         self.load_data()

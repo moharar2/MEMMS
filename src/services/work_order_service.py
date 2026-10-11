@@ -64,10 +64,25 @@ class WorkOrderService:
         if not eq:
             raise NotFoundError("Equipment", equipment_id)
 
-        # Generate unique work order number
-        count = db.query(WorkOrder).count() + 1
+        # Generate unique work order number safely
         year = datetime.now(timezone.utc).year
-        wo_number = f"WO-{year}-{count:04d}"
+        prefix = f"WO-{year}-"
+        latest = db.query(WorkOrder.work_order_number).filter(
+            WorkOrder.work_order_number.like(f"{prefix}%")
+        ).order_by(WorkOrder.id.desc()).first()
+        seq = 1
+        if latest and latest[0]:
+            try:
+                seq = int(latest[0].split("-")[-1]) + 1
+            except (ValueError, IndexError):
+                seq = db.query(WorkOrder).count() + 1
+        else:
+            seq = db.query(WorkOrder).count() + 1
+
+        wo_number = f"{prefix}{seq:04d}"
+        while db.query(WorkOrder).filter_by(work_order_number=wo_number).first():
+            seq += 1
+            wo_number = f"{prefix}{seq:04d}"
 
         wo = WorkOrder(
             work_order_number=wo_number,
@@ -147,7 +162,7 @@ class WorkOrderService:
         open_orders = db.query(WorkOrder).filter(WorkOrder.status.in_(["open", "pending", "assigned"])).count()
         in_progress = db.query(WorkOrder).filter_by(status="in_progress").count()
         completed = db.query(WorkOrder).filter(WorkOrder.status.in_(["completed", "closed"])).count()
-        urgent = db.query(WorkOrder).filter_by(priority="emergency").count()
+        urgent = db.query(WorkOrder).filter_by(priority="critical").count()
 
         return {
             "total": total,

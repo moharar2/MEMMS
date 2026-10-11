@@ -110,6 +110,15 @@ class ActionButton(QPushButton):
                 "hover_bg": "#E0E7FF",
                 "hover_border": "#A5B4FC",
                 "text_color": "#4F46E5"
+            },
+            "print": {
+                "icon": "print",
+                "color": "#0284C7",
+                "bg": "#F0F9FF",
+                "border": "#BAE6FD",
+                "hover_bg": "#E0F2FE",
+                "hover_border": "#7DD3FC",
+                "text_color": "#0284C7"
             }
         }
 

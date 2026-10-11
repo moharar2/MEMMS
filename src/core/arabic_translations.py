@@ -121,7 +121,7 @@ ARABIC_DICTIONARY = {
         "purchase_price": "سعر الشراء (ر.س)",
         "status": "الحالة التشغيلية",
         "risk_level": "درجة الخطورة",
-        "criticality": "الأهمية التشغيلية",
+        "criticality": "درجة الحرجية السريرية",
         "last_maintenance": "آخر صيانة",
         "next_maintenance": "الصيانة القادمة",
         "tabs": {
@@ -243,9 +243,9 @@ ARABIC_DICTIONARY = {
         "low": "منخفض الخطورة"
     },
     "criticality": {
-        "critical": "حرج للغاية",
-        "semi_critical": "شبه حرج",
-        "non_critical": "غير حرج"
+        "critical": "الفئة A - حيوية لدعم الحياة (Life-Supporting)",
+        "semi_critical": "الفئة B - تشخيصية وجراحية (Medium Impact)",
+        "non_critical": "الفئة C - أجهزة عامة داعمة (Non-Critical)"
     },
     "dialog": {
         "confirm_title": "تأكيد الإجراء",

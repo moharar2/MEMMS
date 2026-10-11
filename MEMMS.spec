@@ -1,7 +1,8 @@
-# -*- mode: python ; coding: utf-8 -*-
+import os
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('E:/cmms/src', 'src')]
+project_root = os.path.abspath(SPECPATH)
+datas = [(os.path.join(project_root, 'src'), 'src')]
 binaries = []
 hiddenimports = ['src.models', 'src.models.user', 'src.models.role', 'src.models.equipment', 'src.models.work_order', 'src.models.preventive', 'src.models.inventory', 'src.models.contract', 'src.models.technician', 'src.models.hospital', 'src.models.audit', 'src.core.arabic_translations', 'sqlalchemy.dialects.sqlite']
 tmp_ret = collect_all('qtawesome')
@@ -11,8 +12,8 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['E:/cmms/main.py'],
-    pathex=[],
+    [os.path.join(project_root, 'main.py')],
+    pathex=[project_root],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

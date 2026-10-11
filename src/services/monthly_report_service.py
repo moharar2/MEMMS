@@ -133,8 +133,9 @@ class MonthlyReportService:
                 writer.setResolution(96)
 
                 doc = QTextDocument()
-                doc.setDefaultFont(QFont("Segoe UI", 10))
-                doc.setHtml(html_content)
+                paint_rect = writer.pageLayout().paintRectPixels(writer.resolution())
+                doc.setPageSize(QSizeF(paint_rect.width(), paint_rect.height()))
+                report_service.prepare_rtl_document(doc, html_content, font_size=10)
                 doc.print_(writer)
                 del doc
                 del writer

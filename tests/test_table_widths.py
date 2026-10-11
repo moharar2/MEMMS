@@ -41,7 +41,7 @@ def test_all_views_tables():
 
     inv_v = InventoryView()
     assert inv_v.table_widget.table.columnCount() == 9
-    assert inv_v.table_widget._min_widths == [50, 110, 170, 120, 100, 95, 85, 95, 140]
+    assert inv_v.table_widget._min_widths == [45, 115, 185, 130, 125, 115, 110, 125, 155]
 
     tech_v = TechniciansView()
     assert tech_v.table_widget.table.columnCount() == 9

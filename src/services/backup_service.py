@@ -46,6 +46,13 @@ class BackupService:
         if not os.path.exists(backup_path):
             raise FileNotFoundError(f"Backup file not found at: {backup_path}")
 
+        # Dispose SQLAlchemy connections before live restore to avoid file lock conflicts
+        try:
+            from src.core.database import engine
+            engine.dispose()
+        except Exception:
+            pass
+
         # Live restore via SQLite backup API
         src_conn = sqlite3.connect(backup_path)
         dst_conn = sqlite3.connect(DB_PATH)

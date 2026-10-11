@@ -10,8 +10,8 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, and_
 
-from src.models.equipment import Equipment
-from src.models.work_order import WorkOrder
+from src.models.equipment import Equipment, EquipmentTransfer
+from src.models.work_order import WorkOrder, WorkOrderPart
 from src.models.preventive import PMPlan, PMSchedule, PMExecution
 from src.models.inventory import SparePart, InventoryTransaction
 from src.models.hospital import Department, Hospital
@@ -846,8 +846,12 @@ class ReportService:
 
         wb = openpyxl.Workbook()
         ws = wb.active
-        ws.title = "MEMMS Report"
-        ws.views.sheetView[0].rightToLeft = True
+        ws.title = "تقرير MEMMS"
+        ws.sheet_view.rightToLeft = True
+        try:
+            ws.views.sheetView[0].rightToLeft = True
+        except Exception:
+            pass
 
         title = report_data.get("title", "تقرير الصيانة والأجهزة الطبية")
         summary = report_data.get("summary", {})
@@ -949,9 +953,39 @@ class ReportService:
                 row_values = [row.get(k, "") for k in column_keys]
                 writer.writerow(row_values)
 
+    def prepare_rtl_document(self, doc, html: str, font_size: int = 9, default_font: str = "Segoe UI"):
+        """
+        Sets up QTextDocument to strictly format RTL Arabic layouts,
+        enforcing Right-to-Left on both paragraph options and all internal QTextTables.
+        """
+        from PySide6.QtGui import QFont, QTextOption, QTextTable
+        from PySide6.QtCore import Qt
+
+        doc.setDefaultFont(QFont(default_font, font_size))
+        opt = doc.defaultTextOption()
+        opt.setTextDirection(Qt.LayoutDirection.RightToLeft)
+        opt.setAlignment(Qt.AlignmentFlag.AlignRight)
+        doc.setDefaultTextOption(opt)
+
+        doc.setHtml(html)
+
+        root = doc.rootFrame()
+        if root:
+            for child in root.childFrames():
+                if isinstance(child, QTextTable):
+                    fmt = child.format()
+                    fmt.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+                    fmt.setAlignment(Qt.AlignmentFlag.AlignRight)
+                    child.setFormat(fmt)
+
     # ── 7. HTML / Printable Document Export ──────────────────────────────────
     def generate_html_report(self, report_data: Dict[str, Any]) -> str:
         """Generates standard HTML template for PDF printing with native Arabic RTL styling."""
+        if report_data.get("is_single_equipment"):
+            return self.generate_equipment_history_html(report_data)
+        if report_data.get("is_work_order_ticket"):
+            return self.generate_work_order_ticket_html(report_data)
+
         title = report_data.get("title", "تقرير الصيانة والأجهزة الطبية")
         summary = report_data.get("summary", {})
         display_summary = summary.get("display", {k: v for k, v in summary.items() if k != "display"})
@@ -964,7 +998,7 @@ class ReportService:
         for k, v in display_summary.items():
             val_str = f"{v:,.2f}" if isinstance(v, (int, float)) else str(v)
             summary_cells.append(f"""
-            <td style="background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 6px 10px; text-align: center;">
+            <td dir="rtl" style="background-color: #F8FAFC; border: 1px solid #CBD5E1; padding: 6px 10px; text-align: center;">
                 <div style="font-size: 9px; color: #475569; font-weight: bold; margin-bottom: 2px;">{k}</div>
                 <div style="font-size: 13px; color: #0F766E; font-weight: bold;">{val_str}</div>
             </td>
@@ -973,7 +1007,7 @@ class ReportService:
         summary_table_html = ""
         if summary_cells:
             summary_table_html = f"""
-            <table width="100%" style="margin-bottom: 12px; border-collapse: separate; border-spacing: 4px;">
+            <table dir="rtl" width="100%" style="margin-bottom: 12px; border-collapse: separate; border-spacing: 4px; direction: rtl;">
                 <tr>{"".join(summary_cells)}</tr>
             </table>
             """
@@ -1001,6 +1035,10 @@ class ReportService:
             <meta charset="utf-8">
             <title>{title}</title>
             <style>
+                * {{
+                    direction: rtl;
+                    box-sizing: border-box;
+                }}
                 body {{
                     font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
                     color: #0F172A;
@@ -1015,6 +1053,7 @@ class ReportService:
                     color: #0F766E;
                     margin: 0 0 2pt 0;
                     text-align: center;
+                    direction: rtl;
                 }}
                 .report-title {{
                     font-size: 12pt;
@@ -1022,22 +1061,33 @@ class ReportService:
                     color: #1E293B;
                     margin: 0 0 4pt 0;
                     text-align: center;
+                    direction: rtl;
                 }}
                 .header-container {{
                     border-bottom: 2pt solid #0F766E;
                     padding-bottom: 6pt;
                     margin-bottom: 8pt;
                     text-align: center;
+                    direction: rtl;
                 }}
                 .sub {{
                     color: #64748B;
                     font-size: 8pt;
                     font-weight: 600;
+                    direction: rtl;
+                }}
+                table {{
+                    direction: rtl;
+                    text-align: right;
                 }}
                 table.data-table {{
                     width: 100%;
                     border-collapse: collapse;
                     margin-top: 6pt;
+                    direction: rtl;
+                }}
+                th, td {{
+                    direction: rtl;
                 }}
                 .footer {{
                     margin-top: 10pt;
@@ -1046,17 +1096,18 @@ class ReportService:
                     text-align: center;
                     border-top: 1pt solid #E2E8F0;
                     padding-top: 4pt;
+                    direction: rtl;
                 }}
             </style>
         </head>
-        <body>
-            <div class="header-container">
+        <body dir="rtl">
+            <div dir="rtl" class="header-container">
                 <div class="hospital-title">هيئة مستشفى الثورة العام النموذجي — صنعاء</div>
                 <div class="report-title">{title}</div>
                 <div class="sub">تاريخ استخراج التقرير: {now_str} &nbsp;|&nbsp; الإدارة العامة للشؤون الهندسية والصيانة الطبية &nbsp;|&nbsp; نظام MEMMS</div>
             </div>
             {summary_table_html}
-            <table class="data-table" width="100%">
+            <table dir="rtl" class="data-table" width="100%">
                 <thead>
                     <tr>{headers_html}</tr>
                 </thead>
@@ -1064,8 +1115,820 @@ class ReportService:
                     {rows_html if rows_html else "<tr><td colspan='" + str(len(headers)) + "' style='text-align:center; padding: 14pt; color: #64748B;'>لا توجد بيانات متاحة لهذا التقرير</td></tr>"}
                 </tbody>
             </table>
-            <div class="footer">
+            <div dir="rtl" class="footer">
                 تم استخراج هذا التقرير آلياً عبر نظام إدارة صيانة الأجهزة الطبية (MEMMS) — هيئة مستشفى الثورة العام بصنعاء
+            </div>
+        </body>
+        </html>
+        """
+        return html
+
+    # ── 8. Single Equipment Maintenance History Report ───────────────────────
+    def get_equipment_history_report_data(self, db: Session, equipment_id: int) -> Dict[str, Any]:
+        """Gathers full lifecycle maintenance history for a single medical asset."""
+        eq = db.query(Equipment).filter_by(id=equipment_id).first()
+        if not eq:
+            return {}
+
+        work_orders = db.query(WorkOrder).filter_by(equipment_id=eq.id).order_by(WorkOrder.created_at.desc()).all()
+        pm_schedules = db.query(PMSchedule).filter_by(equipment_id=eq.id).order_by(PMSchedule.due_date.desc()).all()
+
+        wo_ids = [w.id for w in work_orders]
+        parts_consumed = []
+        if wo_ids:
+            parts_consumed = db.query(WorkOrderPart).filter(WorkOrderPart.work_order_id.in_(wo_ids)).all()
+
+        total_wo = len(work_orders)
+        completed_wo = sum(1 for w in work_orders if w.status in ("completed", "closed"))
+        open_wo = sum(1 for w in work_orders if w.status in ("open", "pending", "assigned", "in_progress", "waiting_parts"))
+        total_maint_cost = sum(float(w.total_cost or 0.0) for w in work_orders)
+        total_parts_cost = sum(float(w.total_parts_cost or 0.0) for w in work_orders)
+        total_labor_cost = sum(float(w.total_labor_cost or 0.0) for w in work_orders)
+
+        cost_ratio = (total_maint_cost / float(eq.purchase_price) * 100) if (eq.purchase_price and eq.purchase_price > 0) else 0.0
+
+        wo_rows = []
+        for w in work_orders:
+            wo_rows.append({
+                "work_order_number": w.work_order_number,
+                "created_at": w.created_at.strftime("%Y-%m-%d") if w.created_at else "-",
+                "priority": tr(f"priority.{w.priority}", default=w.priority),
+                "status": tr(f"status.{w.status}", default=w.status),
+                "technician": w.assigned_technician.full_name if w.assigned_technician else "غير مخصص",
+                "failure_description": w.failure_description or "-",
+                "resolution_notes": w.corrective_action or w.diagnosis or "-",
+                "total_cost": float(w.total_cost or 0.0)
+            })
+
+        pm_rows = []
+        for pm in pm_schedules:
+            tech_name = pm.execution.technician.full_name if (pm.execution and pm.execution.technician) else "غير مخصص"
+            plan_title = pm.plan.title if (pm.plan and hasattr(pm.plan, "title")) else (getattr(pm.plan, "name_ar", "-") if pm.plan else "-")
+            pm_rows.append({
+                "schedule_code": f"PM-{pm.id:04d}",
+                "plan_name": plan_title,
+                "scheduled_date": pm.due_date.strftime("%Y-%m-%d") if pm.due_date else "-",
+                "status": tr(f"status.{pm.status}", default=pm.status),
+                "technician": tech_name,
+            })
+
+        part_rows = []
+        for wp in parts_consumed:
+            p_name = wp.part.name_ar if (wp.part and wp.part.name_ar) else (wp.part.name_en if wp.part else "-")
+            part_rows.append({
+                "part_number": wp.part.part_number if wp.part else "-",
+                "name": p_name,
+                "quantity": float(wp.quantity or 0.0),
+                "unit_price": float(wp.unit_price or 0.0),
+                "total_price": float(wp.total_price or 0.0),
+            })
+
+        dept_name = eq.department.name_ar if eq.department else "-"
+        loc_name = eq.location.room_name if eq.location else "-"
+        manuf_name = eq.manufacturer.name if eq.manufacturer else "-"
+        agent_name = eq.agent.name if eq.agent else "-"
+
+        criticality_text = tr(f"criticality.{eq.criticality}", default=eq.criticality)
+        risk_text = tr(f"risk.{eq.risk_level}", default=eq.risk_level)
+        status_text = tr(f"status.{eq.status}", default=eq.status)
+
+        column_keys = ["work_order_number", "created_at", "priority", "status", "technician", "failure_description", "total_cost"]
+        headers = ["رقم أمر العمل", "التاريخ", "الأولوية", "الحالة", "الفني المكلف", "وصف العطل", "التكلفة (ر.س)"]
+
+        return {
+            "title": f"بطاقة السجل الفني وتاريخ صيانة الجهاز: {eq.name_ar or eq.name_en} ({eq.asset_number})",
+            "is_single_equipment": True,
+            "equipment": {
+                "id": eq.id,
+                "asset_number": eq.asset_number,
+                "serial_number": eq.serial_number,
+                "name_ar": eq.name_ar or "-",
+                "name_en": eq.name_en or "-",
+                "model": eq.model or "-",
+                "category": eq.category or "-",
+                "department": dept_name,
+                "location": loc_name,
+                "manufacturer": manuf_name,
+                "agent": agent_name,
+                "status": status_text,
+                "risk_level": risk_text,
+                "criticality": criticality_text,
+                "purchase_date": eq.purchase_date.strftime("%Y-%m-%d") if eq.purchase_date else "-",
+                "installation_date": eq.installation_date.strftime("%Y-%m-%d") if eq.installation_date else "-",
+                "warranty_expiry": eq.warranty_expiry_date.strftime("%Y-%m-%d") if eq.warranty_expiry_date else "-",
+                "purchase_price": float(eq.purchase_price or 0.0),
+                "notes": eq.notes or "-",
+            },
+            "summary": {
+                "total_orders": total_wo,
+                "completed_orders": completed_wo,
+                "open_orders": open_wo,
+                "total_maint_cost": total_maint_cost,
+                "total_parts_cost": total_parts_cost,
+                "total_labor_cost": total_labor_cost,
+                "cost_ratio": cost_ratio,
+                "display": {
+                    "إجمالي أوامر الصيانة": total_wo,
+                    "البلاغات المكتملة": completed_wo,
+                    "البلاغات المفتوحة": open_wo,
+                    "إجمالي تكاليف الصيانة": f"{total_maint_cost:,.2f} ر.س",
+                    "نسبة الصيانة لسعر الشراء": f"{cost_ratio:.1f}%"
+                }
+            },
+            "headers": headers,
+            "column_keys": column_keys,
+            "rows": wo_rows,
+            "work_orders": wo_rows,
+            "pm_schedules": pm_rows,
+            "parts_consumed": part_rows
+        }
+
+    def generate_equipment_history_html(self, report_data: Dict[str, Any]) -> str:
+        """Generates dedicated Medical Equipment Passport & Maintenance History HTML report."""
+        eq = report_data.get("equipment", {})
+        summary = report_data.get("summary", {})
+        wo_list = report_data.get("work_orders", [])
+        pm_list = report_data.get("pm_schedules", [])
+        parts_list = report_data.get("parts_consumed", [])
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        # Work Orders Table rows
+        wo_rows_html = ""
+        for idx, w in enumerate(wo_list):
+            bg = "#F8FAFC" if idx % 2 == 1 else "#FFFFFF"
+            wo_rows_html += f"""
+            <tr style="background-color: {bg};">
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center; font-weight: bold; color: #0F766E;">{w.get('work_order_number')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{w.get('created_at')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{w.get('priority')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{w.get('status')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{w.get('technician')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{w.get('failure_description')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center; font-weight: bold;">{w.get('total_cost', 0):,.2f} ر.س</td>
+            </tr>
+            """
+        if not wo_rows_html:
+            wo_rows_html = "<tr><td colspan='7' style='text-align: center; padding: 10pt; color: #64748B;'>لا توجد بلاغات أو أوامر صيانة مسجلة لهذا الجهاز حتى الآن</td></tr>"
+
+        # PM Schedules rows
+        pm_rows_html = ""
+        for idx, pm in enumerate(pm_list):
+            bg = "#F8FAFC" if idx % 2 == 1 else "#FFFFFF"
+            pm_rows_html += f"""
+            <tr style="background-color: {bg};">
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center; font-weight: bold;">{pm.get('schedule_code')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{pm.get('plan_name')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{pm.get('scheduled_date')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{pm.get('status')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{pm.get('technician')}</td>
+            </tr>
+            """
+        if not pm_rows_html:
+            pm_rows_html = "<tr><td colspan='5' style='text-align: center; padding: 8pt; color: #64748B;'>لا توجد جداول صيانة وقائية مرتبطة بهذا الجهاز</td></tr>"
+
+        # Parts Consumed rows
+        parts_rows_html = ""
+        for idx, p in enumerate(parts_list):
+            bg = "#F8FAFC" if idx % 2 == 1 else "#FFFFFF"
+            parts_rows_html += f"""
+            <tr style="background-color: {bg};">
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('part_number')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{p.get('name')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('quantity'):g}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('unit_price', 0):,.2f} ر.س</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center; font-weight: bold;">{p.get('total_price', 0):,.2f} ر.س</td>
+            </tr>
+            """
+        if not parts_rows_html:
+            parts_rows_html = "<tr><td colspan='5' style='text-align: center; padding: 8pt; color: #64748B;'>لم يتم تسجيل صرف أي قطع غيار على هذا الجهاز</td></tr>"
+
+        html = f"""
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+            <meta charset="utf-8">
+            <title>بطاقة السجل الفني وتاريخ صيانة الجهاز</title>
+            <style>
+                * {{
+                    direction: rtl;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+                    color: #0F172A;
+                    direction: rtl;
+                    text-align: right;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .header-box {{
+                    border-bottom: 2.5pt solid #0F766E;
+                    padding-bottom: 8pt;
+                    margin-bottom: 10pt;
+                    text-align: center;
+                    direction: rtl;
+                }}
+                .hospital-name {{
+                    font-size: 15pt;
+                    font-weight: 800;
+                    color: #0F766E;
+                    margin: 0 0 2pt 0;
+                    direction: rtl;
+                }}
+                .report-title {{
+                    font-size: 13pt;
+                    font-weight: 700;
+                    color: #1E293B;
+                    margin: 2pt 0 4pt 0;
+                    direction: rtl;
+                }}
+                .sub {{
+                    color: #64748B;
+                    font-size: 8.5pt;
+                    font-weight: 600;
+                    direction: rtl;
+                }}
+                .section-header {{
+                    background-color: #0F766E;
+                    color: #FFFFFF;
+                    font-size: 9.5pt;
+                    font-weight: bold;
+                    padding: 4pt 8pt;
+                    border-radius: 3pt;
+                    margin-top: 10pt;
+                    margin-bottom: 5pt;
+                    direction: rtl;
+                    text-align: right;
+                }}
+                table {{
+                    direction: rtl;
+                    text-align: right;
+                }}
+                table.info-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 6pt;
+                    direction: rtl;
+                }}
+                table.info-table td {{
+                    padding: 4.5pt 6pt;
+                    border: 1pt solid #E2E8F0;
+                    font-size: 8.5pt;
+                    direction: rtl;
+                }}
+                table.info-table td.lbl {{
+                    background-color: #F8FAFC;
+                    color: #475569;
+                    font-weight: 700;
+                    width: 18%;
+                    text-align: right;
+                }}
+                table.info-table td.val {{
+                    color: #0F172A;
+                    width: 32%;
+                    text-align: right;
+                }}
+                .kpi-table {{
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 4pt;
+                    margin: 6pt 0;
+                    direction: rtl;
+                }}
+                .kpi-cell {{
+                    background-color: #F8FAFC;
+                    border: 1pt solid #CBD5E1;
+                    padding: 5pt 8pt;
+                    text-align: center;
+                    border-radius: 4pt;
+                    direction: rtl;
+                }}
+                table.data-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 6pt;
+                    direction: rtl;
+                }}
+                table.data-table th {{
+                    background-color: #0D9488;
+                    color: #FFFFFF;
+                    padding: 5pt 4pt;
+                    border: 1pt solid #0F766E;
+                    font-size: 8.5pt;
+                    text-align: center;
+                    direction: rtl;
+                }}
+                th, td {{
+                    direction: rtl;
+                }}
+                .signatures {{
+                    margin-top: 16pt;
+                    width: 100%;
+                    border-collapse: collapse;
+                    direction: rtl;
+                }}
+                .sig-box {{
+                    width: 33%;
+                    text-align: center;
+                    padding: 8pt;
+                    border-top: 1pt solid #94A3B8;
+                    font-size: 8.5pt;
+                    color: #334155;
+                    direction: rtl;
+                }}
+                .footer {{
+                    margin-top: 14pt;
+                    font-size: 7.5pt;
+                    color: #94A3B8;
+                    text-align: center;
+                    border-top: 1pt solid #E2E8F0;
+                    padding-top: 4pt;
+                    direction: rtl;
+                }}
+            </style>
+        </head>
+        <body dir="rtl">
+            <div dir="rtl" class="header-box">
+                <div class="hospital-name">هيئة مستشفى الثورة العام النموذجي — صنعاء</div>
+                <div class="report-title">بطاقة السجل الفني وتاريخ صيانة الجهاز الطبي (Equipment Passport)</div>
+                <div class="sub">الإدارة العامة للشؤون الهندسية والصيانة الطبية &nbsp;|&nbsp; استخراج النظام: {now_str}</div>
+            </div>
+
+            <div dir="rtl" class="section-header">1. البيانات التعريفية والمواصفات السريرية للجهاز</div>
+            <table dir="rtl" class="info-table">
+                <tr>
+                    <td class="lbl">رقم الأصل (Asset ID):</td>
+                    <td class="val" style="font-weight: bold; color: #0F766E;">{eq.get('asset_number')}</td>
+                    <td class="lbl">الرقم التسلسلي (S/N):</td>
+                    <td class="val" style="font-weight: bold;">{eq.get('serial_number')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">اسم الجهاز الطبي:</td>
+                    <td class="val" style="font-weight: bold;">{eq.get('name_ar')}</td>
+                    <td class="lbl">الاسم بالإنجليزية والموديل:</td>
+                    <td class="val">{eq.get('name_en')} ({eq.get('model')})</td>
+                </tr>
+                <tr>
+                    <td class="lbl">القسم الطبي والموقع:</td>
+                    <td class="val">{eq.get('department')} — {eq.get('location')}</td>
+                    <td class="lbl">التصنيف الطبي:</td>
+                    <td class="val">{eq.get('category')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">الشركة المصنعة:</td>
+                    <td class="val">{eq.get('manufacturer')}</td>
+                    <td class="lbl">الوكيل المحلي المعتمد:</td>
+                    <td class="val">{eq.get('agent')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">الحالة التشغيلية الحالية:</td>
+                    <td class="val" style="font-weight: bold;">{eq.get('status')}</td>
+                    <td class="lbl">درجة الخطورة:</td>
+                    <td class="val">{eq.get('risk_level')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">درجة الحرجية السريرية:</td>
+                    <td class="val" style="font-weight: bold; color: #0F766E;">{eq.get('criticality')}</td>
+                    <td class="lbl">تاريخ الشراء والتركيب:</td>
+                    <td class="val">{eq.get('purchase_date')} / {eq.get('installation_date')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">سعر الشراء الأساسي:</td>
+                    <td class="val" style="font-weight: bold;">{eq.get('purchase_price', 0):,.2f} ر.س</td>
+                    <td class="lbl">تاريخ انتهاء فترة الضمان:</td>
+                    <td class="val">{eq.get('warranty_expiry')}</td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="section-header">2. مؤشرات الأداء والتكاليف التراكمية لصيانة الجهاز</div>
+            <table dir="rtl" class="kpi-table">
+                <tr>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">إجمالي أوامر الصيانة</div>
+                        <div style="font-size: 13pt; font-weight: bold; color: #0F766E;">{summary.get('total_orders', 0)}</div>
+                    </td>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">البلاغات المكتملة</div>
+                        <div style="font-size: 13pt; font-weight: bold; color: #059669;">{summary.get('completed_orders', 0)}</div>
+                    </td>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">البلاغات الجارية</div>
+                        <div style="font-size: 13pt; font-weight: bold; color: #D97706;">{summary.get('open_orders', 0)}</div>
+                    </td>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">تكلفة قطع الغيار المستهلكة</div>
+                        <div style="font-size: 12pt; font-weight: bold; color: #475569;">{summary.get('total_parts_cost', 0):,.2f} ر.س</div>
+                    </td>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">إجمالي تكاليف الصيانة</div>
+                        <div style="font-size: 12pt; font-weight: bold; color: #DC2626;">{summary.get('total_maint_cost', 0):,.2f} ر.س</div>
+                    </td>
+                    <td class="kpi-cell">
+                        <div style="font-size: 8pt; color: #64748B;">نسبة الصيانة لسعر الشراء</div>
+                        <div style="font-size: 13pt; font-weight: bold; color: #0F766E;">{summary.get('cost_ratio', 0):.1f}%</div>
+                    </td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="section-header">3. السجل التاريخي لأوامر وبلاغات الصيانة المنفذة (Work Orders)</div>
+            <table dir="rtl" class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 13%;">رقم أمر العمل</th>
+                        <th style="width: 10%;">التاريخ</th>
+                        <th style="width: 9%;">الأولوية</th>
+                        <th style="width: 10%;">الحالة</th>
+                        <th style="width: 15%;">الفني المكلف</th>
+                        <th>وصف العطل / المشكلة</th>
+                        <th style="width: 12%;">التكلفة</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {wo_rows_html}
+                </tbody>
+            </table>
+
+            <div dir="rtl" class="section-header">4. سجل الصيانة الوقائية والفحص الدوري المجدول (PM Plans)</div>
+            <table dir="rtl" class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">كود الجدول</th>
+                        <th>خطة الصيانة الوقائية</th>
+                        <th style="width: 15%;">التاريخ المجدول</th>
+                        <th style="width: 15%;">الحالة</th>
+                        <th style="width: 20%;">الفني المكلف</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {pm_rows_html}
+                </tbody>
+            </table>
+
+            <div dir="rtl" class="section-header">5. قطع الغيار المستبدلة والمستهلكة على الجهاز</div>
+            <table dir="rtl" class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 18%;">رقم القطعة / الكود</th>
+                        <th>اسم قطعة الغيار</th>
+                        <th style="width: 12%;">الكمية</th>
+                        <th style="width: 16%;">سعر الوحدة</th>
+                        <th style="width: 18%;">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {parts_rows_html}
+                </tbody>
+            </table>
+
+            <table dir="rtl" class="signatures">
+                <tr>
+                    <td class="sig-box">
+                        <strong>مهندس الصيانة الطبية المسؤول</strong><br><br>
+                        التوقيع: ............................
+                    </td>
+                    <td class="sig-box">
+                        <strong>رئيس قسم الهندسة الطبية</strong><br><br>
+                        التوقيع: ............................
+                    </td>
+                    <td class="sig-box">
+                        <strong>مدير عام المستشفى / الاعتماد</strong><br><br>
+                        الختم الرسمي: ............................
+                    </td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="footer">
+                نظام إدارة صيانة الأجهزة الطبية (MEMMS) — هيئة مستشفى الثورة العام النموذجي بصنعاء — السجل التاريخي للأصل الطبي
+            </div>
+        </body>
+        </html>
+        """
+        return html
+
+    # ── 9. Individual Work Order Maintenance Ticket / Job Sheet ──────────────
+    def get_work_order_ticket_data(self, db: Session, work_order_id: int) -> Dict[str, Any]:
+        """Gathers single work order ticket details with parts and equipment profile."""
+        wo = db.query(WorkOrder).filter_by(id=work_order_id).first()
+        if not wo:
+            return {}
+
+        eq = wo.equipment
+        parts = db.query(WorkOrderPart).filter_by(work_order_id=wo.id).all()
+
+        part_rows = []
+        for p in parts:
+            p_name = p.part.name_ar if (p.part and p.part.name_ar) else (p.part.name_en if p.part else "-")
+            part_rows.append({
+                "part_number": p.part.part_number if p.part else "-",
+                "name": p_name,
+                "quantity": float(p.quantity or 0.0),
+                "unit_price": float(p.unit_price or 0.0),
+                "total_price": float(p.total_price or 0.0)
+            })
+
+        return {
+            "title": f"إشعار وتذكرة أمر صيانة رقم {wo.work_order_number}",
+            "is_work_order_ticket": True,
+            "work_order": {
+                "id": wo.id,
+                "number": wo.work_order_number,
+                "created_at": wo.created_at.strftime("%Y-%m-%d %H:%M") if wo.created_at else "-",
+                "completed_at": wo.completed_at.strftime("%Y-%m-%d %H:%M") if wo.completed_at else "-",
+                "priority": tr(f"priority.{wo.priority}", default=wo.priority),
+                "status": tr(f"status.{wo.status}", default=wo.status),
+                "reported_by": wo.reported_by_name or "-",
+                "department": wo.department.name_ar if wo.department else (eq.department.name_ar if eq and eq.department else "-"),
+                "technician": wo.assigned_technician.full_name if wo.assigned_technician else "غير مخصص",
+                "failure_description": wo.failure_description or "-",
+                "resolution_notes": wo.corrective_action or wo.diagnosis or "-",
+                "labor_cost": float(wo.total_labor_cost or 0.0),
+                "parts_cost": float(wo.total_parts_cost or 0.0),
+                "total_cost": float(wo.total_cost or 0.0)
+            },
+            "equipment": {
+                "asset_number": eq.asset_number if eq else "-",
+                "serial_number": eq.serial_number if eq else "-",
+                "name_ar": eq.name_ar if eq else "-",
+                "model": eq.model if eq else "-",
+                "criticality": tr(f"criticality.{eq.criticality}", default=eq.criticality) if eq else "-",
+                "risk_level": tr(f"risk.{eq.risk_level}", default=eq.risk_level) if eq else "-"
+            } if eq else {},
+            "parts": part_rows
+        }
+
+    def generate_work_order_ticket_html(self, report_data: Dict[str, Any]) -> str:
+        """Generates printable Work Order Maintenance Ticket / Handover Sheet."""
+        wo = report_data.get("work_order", {})
+        eq = report_data.get("equipment", {})
+        parts = report_data.get("parts", [])
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+        parts_rows_html = ""
+        for idx, p in enumerate(parts):
+            bg = "#F8FAFC" if idx % 2 == 1 else "#FFFFFF"
+            parts_rows_html += f"""
+            <tr style="background-color: {bg};">
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('part_number')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: right;">{p.get('name')}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('quantity'):g}</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center;">{p.get('unit_price', 0):,.2f} ر.س</td>
+                <td style="padding: 5pt; border: 1pt solid #CBD5E1; text-align: center; font-weight: bold;">{p.get('total_price', 0):,.2f} ر.س</td>
+            </tr>
+            """
+        if not parts_rows_html:
+            parts_rows_html = "<tr><td colspan='5' style='text-align: center; padding: 6pt; color: #64748B;'>لم يتم استهلاك قطع غيار في أمر الصيانة هذا</td></tr>"
+
+        html = f"""
+        <!DOCTYPE html>
+        <html dir="rtl" lang="ar">
+        <head>
+            <meta charset="utf-8">
+            <title>تذكرة أمر صيانة رقم {wo.get('number')}</title>
+            <style>
+                * {{
+                    direction: rtl;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+                    color: #0F172A;
+                    direction: rtl;
+                    text-align: right;
+                    margin: 0;
+                    padding: 0;
+                }}
+                .header-box {{
+                    border-bottom: 2.5pt solid #0284C7;
+                    padding-bottom: 8pt;
+                    margin-bottom: 10pt;
+                    text-align: center;
+                    direction: rtl;
+                }}
+                .hospital-name {{
+                    font-size: 15pt;
+                    font-weight: 800;
+                    color: #0284C7;
+                    margin: 0 0 2pt 0;
+                    direction: rtl;
+                }}
+                .report-title {{
+                    font-size: 13pt;
+                    font-weight: 700;
+                    color: #1E293B;
+                    margin: 2pt 0 4pt 0;
+                    direction: rtl;
+                }}
+                .sub {{
+                    color: #64748B;
+                    font-size: 8.5pt;
+                    font-weight: 600;
+                    direction: rtl;
+                }}
+                .section-header {{
+                    background-color: #0284C7;
+                    color: #FFFFFF;
+                    font-size: 9.5pt;
+                    font-weight: bold;
+                    padding: 4pt 8pt;
+                    border-radius: 3pt;
+                    margin-top: 10pt;
+                    margin-bottom: 5pt;
+                    direction: rtl;
+                    text-align: right;
+                }}
+                table {{
+                    direction: rtl;
+                    text-align: right;
+                }}
+                table.info-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 6pt;
+                    direction: rtl;
+                }}
+                table.info-table td {{
+                    padding: 5pt 7pt;
+                    border: 1pt solid #E2E8F0;
+                    font-size: 8.5pt;
+                    direction: rtl;
+                }}
+                table.info-table td.lbl {{
+                    background-color: #F8FAFC;
+                    color: #475569;
+                    font-weight: 700;
+                    width: 20%;
+                    text-align: right;
+                }}
+                table.info-table td.val {{
+                    color: #0F172A;
+                    width: 30%;
+                    text-align: right;
+                }}
+                table.data-table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-bottom: 6pt;
+                    direction: rtl;
+                }}
+                table.data-table th {{
+                    background-color: #0369A1;
+                    color: #FFFFFF;
+                    padding: 5pt 4pt;
+                    border: 1pt solid #0284C7;
+                    font-size: 8.5pt;
+                    text-align: center;
+                    direction: rtl;
+                }}
+                th, td {{
+                    direction: rtl;
+                }}
+                .desc-box {{
+                    border: 1pt solid #CBD5E1;
+                    background-color: #F8FAFC;
+                    padding: 8pt;
+                    border-radius: 4pt;
+                    font-size: 8.5pt;
+                    line-height: 1.5;
+                    margin-bottom: 6pt;
+                    direction: rtl;
+                    text-align: right;
+                }}
+                .signatures {{
+                    margin-top: 18pt;
+                    width: 100%;
+                    border-collapse: collapse;
+                    direction: rtl;
+                }}
+                .sig-box {{
+                    width: 33%;
+                    text-align: center;
+                    padding: 8pt;
+                    border-top: 1pt solid #94A3B8;
+                    font-size: 8.5pt;
+                    color: #334155;
+                    direction: rtl;
+                }}
+                .footer {{
+                    margin-top: 14pt;
+                    font-size: 7.5pt;
+                    color: #94A3B8;
+                    text-align: center;
+                    border-top: 1pt solid #E2E8F0;
+                    padding-top: 4pt;
+                    direction: rtl;
+                }}
+            </style>
+        </head>
+        <body dir="rtl">
+            <div dir="rtl" class="header-box">
+                <div class="hospital-name">هيئة مستشفى الثورة العام النموذجي — صنعاء</div>
+                <div class="report-title">إشعار وتذكرة أمر صيانة طبية (Work Order Maintenance Ticket)</div>
+                <div class="sub">الإدارة العامة للشؤون الهندسية والصيانة الطبية &nbsp;|&nbsp; تاريخ الطباعة: {now_str}</div>
+            </div>
+
+            <div dir="rtl" class="section-header">1. بيانات أمر الصيانة والبلاغ</div>
+            <table dir="rtl" class="info-table">
+                <tr>
+                    <td class="lbl">رقم أمر العمل (WO #):</td>
+                    <td class="val" style="font-weight: bold; color: #0284C7; font-size: 10pt;">{wo.get('number')}</td>
+                    <td class="lbl">تاريخ ووقت البلاغ:</td>
+                    <td class="val">{wo.get('created_at')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">درجة الأولوية:</td>
+                    <td class="val" style="font-weight: bold;">{wo.get('priority')}</td>
+                    <td class="lbl">حالة أمر العمل:</td>
+                    <td class="val" style="font-weight: bold;">{wo.get('status')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">القسم الطبي الطالب:</td>
+                    <td class="val">{wo.get('department')}</td>
+                    <td class="lbl">اسم مقدم البلاغ:</td>
+                    <td class="val">{wo.get('reported_by')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">الفني / المهندس المكلف:</td>
+                    <td class="val" style="font-weight: bold;">{wo.get('technician')}</td>
+                    <td class="lbl">تاريخ إتمام الصيانة:</td>
+                    <td class="val">{wo.get('completed_at')}</td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="section-header">2. بيانات الجهاز الطبي الخاضع للصيانة</div>
+            <table dir="rtl" class="info-table">
+                <tr>
+                    <td class="lbl">رقم الأصل (Asset Tag):</td>
+                    <td class="val" style="font-weight: bold; color: #0F766E;">{eq.get('asset_number')}</td>
+                    <td class="lbl">الرقم التسلسلي (S/N):</td>
+                    <td class="val">{eq.get('serial_number')}</td>
+                </tr>
+                <tr>
+                    <td class="lbl">اسم الجهاز والموديل:</td>
+                    <td class="val" style="font-weight: bold;">{eq.get('name_ar')} ({eq.get('model')})</td>
+                    <td class="lbl">درجة الحرجية السريرية:</td>
+                    <td class="val">{eq.get('criticality')}</td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="section-header">3. وصف العطل وبلاغ المشكلة</div>
+            <div dir="rtl" class="desc-box">
+                {wo.get('failure_description')}
+            </div>
+
+            <div dir="rtl" class="section-header">4. الإجراءات الهندسية والتصحيحية المنفذة</div>
+            <div dir="rtl" class="desc-box">
+                {wo.get('resolution_notes')}
+            </div>
+
+            <div dir="rtl" class="section-header">5. قطع الغيار المستهلكة وتكاليف الصيانة</div>
+            <table dir="rtl" class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 20%;">رقم القطعة</th>
+                        <th>اسم قطعة الغيار</th>
+                        <th style="width: 12%;">الكمية</th>
+                        <th style="width: 16%;">سعر الوحدة</th>
+                        <th style="width: 18%;">الإجمالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {parts_rows_html}
+                </tbody>
+            </table>
+
+            <table dir="rtl" class="info-table" style="margin-top: 6pt;">
+                <tr>
+                    <td class="lbl" style="text-align: center;">تكلفة العمالة المباشرة:</td>
+                    <td class="val" style="text-align: center; font-weight: bold;">{wo.get('labor_cost', 0):,.2f} ر.س</td>
+                    <td class="lbl" style="text-align: center;">تكلفة قطع الغيار:</td>
+                    <td class="val" style="text-align: center; font-weight: bold;">{wo.get('parts_cost', 0):,.2f} ر.س</td>
+                    <td class="lbl" style="text-align: center; background-color: #E0F2FE; color: #0369A1;">إجمالي تكلفة أمر الصيانة:</td>
+                    <td class="val" style="text-align: center; font-weight: bold; color: #0284C7; font-size: 10pt;">{wo.get('total_cost', 0):,.2f} ر.س</td>
+                </tr>
+            </table>
+
+            <table dir="rtl" class="signatures">
+                <tr>
+                    <td class="sig-box">
+                        <strong>مهندس / فني الصيانة المنفذ</strong><br><br>
+                        الاسم: {wo.get('technician')}<br>
+                        التوقيع: ............................
+                    </td>
+                    <td class="sig-box">
+                        <strong>مستلم الجهاز بالقسم الطبي</strong><br><br>
+                        الاسم: ............................<br>
+                        التوقيع: ............................
+                    </td>
+                    <td class="sig-box">
+                        <strong>اعتماد رئيس قسم الهندسة الطبية</strong><br><br>
+                        التوقيع: ............................<br>
+                        الختم: ............................
+                    </td>
+                </tr>
+            </table>
+
+            <div dir="rtl" class="footer">
+                نظام إدارة صيانة الأجهزة الطبية (MEMMS) — هيئة مستشفى الثورة العام بصنعاء — إشعار صيانة رسمي
             </div>
         </body>
         </html>
@@ -1074,3 +1937,4 @@ class ReportService:
 
 
 report_service = ReportService()
+

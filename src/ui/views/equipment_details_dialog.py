@@ -12,9 +12,9 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QFrame, QGridLayout, QTableWidget,
     QTableWidgetItem, QHeaderView, QFileDialog, QMessageBox
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDesktopServices
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, Signal, QUrl, QSizeF, QMarginsF
+from PySide6.QtGui import QDesktopServices, QTextDocument, QPageSize, QPageLayout, QFont
+from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
 from sqlalchemy.orm import joinedload
 from src.core.i18n import tr
 from src.core.database import get_db
@@ -24,6 +24,7 @@ from src.models.preventive import PMSchedule
 from src.models.attachment import Attachment
 from src.services.attachment_service import attachment_service
 from src.services.equipment_service import equipment_service
+from src.services.report_service import report_service
 from src.services.auth_service import auth_service
 from src.ui.theme.icons import icon
 from src.ui.components.status_badge import StatusBadge
@@ -154,6 +155,22 @@ class EquipmentDetailsDialog(QDialog):
         edit_btn.clicked.connect(self._on_edit)
         btn_layout.addWidget(edit_btn)
 
+        report_btn = QPushButton("تقرير صيانة الجهاز (طباعة / PDF)")
+        report_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #0284C7;
+                color: #FFFFFF;
+                font-weight: 700;
+                font-size: 12px;
+                padding: 6px 14px;
+                border-radius: 6px;
+            }
+            QPushButton:hover { background-color: #0369A1; }
+        """)
+        report_btn.setIcon(icon("print", color="#FFFFFF", size=14))
+        report_btn.clicked.connect(self._on_export_report)
+        btn_layout.addWidget(report_btn)
+
         btn_layout.addStretch()
 
         close_btn = QPushButton("إغلاق")
@@ -218,7 +235,7 @@ class EquipmentDetailsDialog(QDialog):
         self._add_detail_row(l_layout, 2, "انتهاء فترة الضمان:", str(eq.warranty_expiry_date or "—"))
         price_str = f"{eq.purchase_price:,.2f} ر.س" if eq.purchase_price else "—"
         self._add_detail_row(l_layout, 3, "سعر الشراء الأساسي:", price_str)
-        self._add_detail_row(l_layout, 4, "مستوى الأهمية التشغيلية:", tr(f"criticality.{eq.criticality}"))
+        self._add_detail_row(l_layout, 4, "درجة الحرجية السريرية:", tr(f"criticality.{eq.criticality}"))
         self._add_detail_row(l_layout, 5, "ملاحظات:", eq.notes or "—")
 
         self.tabs.addTab(tab_life, "الضمان والبيانات المالية")
@@ -830,3 +847,34 @@ class EquipmentDetailsDialog(QDialog):
     def _on_transfer(self):
         self.accept()
         self.transfer_requested.emit(self.equipment.id)
+
+    def _on_export_report(self):
+        try:
+            with get_db() as db:
+                data = report_service.get_equipment_history_report_data(db, self.equipment.id)
+            if not data:
+                QMessageBox.warning(self, "تنبيه", "تعذر جلب بيانات تقرير صيانة الجهاز.")
+                return
+
+            html = report_service.generate_equipment_history_html(data)
+
+            printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
+            printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+            printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+            printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout.Unit.Millimeter)
+
+            def _paint_preview(target_printer):
+                doc = QTextDocument()
+                paint_rect = target_printer.pageLayout().paintRectPixels(target_printer.resolution())
+                doc.setPageSize(QSizeF(paint_rect.width(), paint_rect.height()))
+                report_service.prepare_rtl_document(doc, html, font_size=9)
+                doc.print_(target_printer)
+
+            preview = QPrintPreviewDialog(printer, self)
+            preview.setWindowTitle(f"تقرير صيانة الجهاز الطبي — {self.equipment.asset_number}")
+            preview.resize(1050, 800)
+            preview.paintRequested.connect(_paint_preview)
+            preview.exec()
+        except Exception as e:
+            QMessageBox.critical(self, "خطأ في الطباعة", f"فشل فتح تقرير الصيانة: {str(e)}")
+
