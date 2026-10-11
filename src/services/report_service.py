@@ -1062,7 +1062,7 @@ class ReportService:
         safe_title = self._html_value(title)
         page_mode = "landscape" if orientation == "landscape" else "portrait"
         return f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html dir="rtl" lang="ar">
 <head>
 <meta charset="utf-8">
 <title>{safe_title}</title>
@@ -1291,8 +1291,13 @@ h2.section {{ direction: rtl; text-align: right; background: #E8F4F2; color: #11
             ["رقم القطعة", "اسم القطعة", "الكمية", "سعر الوحدة (ر.س)", "الإجمالي (ر.س)"],
             part_rows, "لم يتم تسجيل صرف قطع غيار لهذا الجهاز"
         )
+        content += """<table class="signatures" dir="rtl"><tbody><tr>
+<td><strong>الفني / المهندس المسؤول</strong><br><br>الاسم والتوقيع: ........................</td>
+<td><strong>رئيس قسم الهندسة الطبية</strong><br><br>الاسم والتوقيع: ........................</td>
+<td><strong>اعتماد الإدارة</strong><br><br>التوقيع والختم: ........................</td>
+</tr></tbody></table>"""
         return self._html_document(
-            "السجل الفني وتاريخ صيانة الجهاز", content, report_data
+            "بطاقة السجل الفني وتاريخ صيانة الجهاز الطبي", content, report_data
         )
 
     # ── 9. Individual Work Order Maintenance Ticket / Job Sheet ──────────────
@@ -1390,7 +1395,7 @@ h2.section {{ direction: rtl; text-align: right; background: #E8F4F2; color: #11
 <td><strong>الاعتماد الإداري</strong><br><br>التوقيع والختم: ........................</td>
 </tr></tbody></table>"""
         return self._html_document(
-            wo.get("number") and f"تذكرة أمر الصيانة رقم {wo.get('number')}" or "تذكرة أمر الصيانة",
+            wo.get("number") and f"إشعار وتذكرة أمر صيانة طبية — رقم {wo.get('number')}" or "إشعار وتذكرة أمر صيانة طبية",
             content, report_data
         )
 
