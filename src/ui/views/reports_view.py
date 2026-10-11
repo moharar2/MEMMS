@@ -632,7 +632,11 @@ class ReportsView(QWidget):
             html = report_service.generate_html_report(self.current_report_data)
 
             printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
-            printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+            orientation = report_service.get_page_orientation(self.current_report_data)
+            printer.setPageOrientation(
+                QPageLayout.Orientation.Landscape if orientation == "landscape"
+                else QPageLayout.Orientation.Portrait
+            )
             printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
             printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout.Unit.Millimeter)
 
@@ -691,7 +695,11 @@ class ReportsView(QWidget):
 
             writer = QPdfWriter(path)
             writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-            writer.setPageOrientation(QPageLayout.Orientation.Landscape)
+            orientation = report_service.get_page_orientation(self.current_report_data)
+            writer.setPageOrientation(
+                QPageLayout.Orientation.Landscape if orientation == "landscape"
+                else QPageLayout.Orientation.Portrait
+            )
             writer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout.Unit.Millimeter)
             writer.setResolution(96)
 

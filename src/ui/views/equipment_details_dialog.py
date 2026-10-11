@@ -648,36 +648,42 @@ class EquipmentDetailsDialog(QDialog):
     def _print_receiving(self):
         rec = self.cached_receiving
         eq = self.equipment
-        html = f"""
-        <html dir='rtl' lang='ar'>
-        <body style='font-family: Segoe UI, Tahoma; direction: rtl; text-align: right; padding: 20px;'>
-            <h2 style='text-align: center; color: #0F766E;'>محضر استلام وتعميد جهاز طبي</h2>
-            <hr/>
-            <table style='width: 100%; font-size: 13px; line-height: 2;'>
-                <tr><td><b>اسم الجهاز:</b> {eq.name_ar}</td><td><b>رقم الأصل:</b> {eq.asset_number}</td></tr>
-                <tr><td><b>الموديل:</b> {eq.model or '—'}</td><td><b>الرقم التسلسلي:</b> {eq.serial_number}</td></tr>
-                <tr><td><b>القسم:</b> {eq.department.name_ar if eq.department else '—'}</td><td><b>الشركة المصنعة:</b> {eq.manufacturer.name if eq.manufacturer else '—'}</td></tr>
-                <tr><td><b>رقم التعميد:</b> {rec.commissioning_number if rec and rec.commissioning_number else '—'}</td><td><b>تاريخ التعميد:</b> {rec.commissioning_date if rec else '—'}</td></tr>
-                <tr><td><b>تاريخ الاستلام:</b> {rec.receipt_date if rec else '—'}</td><td><b>رقم محضر الاستلام:</b> {rec.receipt_report_number if rec and rec.receipt_report_number else '—'}</td></tr>
-                <tr><td><b>فني الاستلام:</b> {rec.receiving_technician_name if rec and rec.receiving_technician_name else '—'}</td><td><b>مسؤول التسجيل:</b> {rec.registration_officer_name if rec and rec.registration_officer_name else '—'}</td></tr>
-                <tr><td colspan='2'><b>ملاحظات الاستلام:</b> {rec.receipt_notes if rec and rec.receipt_notes else '—'}</td></tr>
-            </table>
-            <br/><br/>
-            <table style='width: 100%; text-align: center; margin-top: 40px;'>
-                <tr>
-                    <td><b>توقيع فني الاستلام</b><br/><br/>...........................</td>
-                    <td><b>توقيع مسؤول التسجيل</b><br/><br/>...........................</td>
-                    <td><b>اعتماد رئيس القسم الهندسي</b><br/><br/>...........................</td>
-                </tr>
-            </table>
-        </body>
-        </html>
-        """
-        dest, _ = QFileDialog.getSaveFileName(self, "حفظ محضر الاستلام كملف HTML / PDF", f"محضر_استلام_{eq.asset_number}.html")
+        report_data = {
+            "title": "محضر استلام وتعميد جهاز طبي",
+            "equipment": {
+                "name_ar": eq.name_ar or "—",
+                "asset_number": eq.asset_number or "—",
+                "model": eq.model or "—",
+                "serial_number": eq.serial_number or "—",
+                "department": eq.department.name_ar if eq.department else "—",
+                "manufacturer": eq.manufacturer.name if eq.manufacturer else "—",
+            },
+            "receiving": {
+                "commissioning_number": rec.commissioning_number if rec and rec.commissioning_number else "—",
+                "commissioning_date": str(rec.commissioning_date) if rec and rec.commissioning_date else "—",
+                "receipt_date": str(rec.receipt_date) if rec and rec.receipt_date else "—",
+                "receipt_report_number": rec.receipt_report_number if rec and rec.receipt_report_number else "—",
+                "receiving_technician_name": (
+                    rec.receiving_technician_name or
+                    (rec.receiving_technician.full_name if rec.receiving_technician else "—")
+                ) if rec else "—",
+                "registration_officer_name": (
+                    rec.registration_officer_name or
+                    (rec.registration_officer.full_name if rec.registration_officer else "—")
+                ) if rec else "—",
+                "registration_date": str(rec.registration_date) if rec and rec.registration_date else "—",
+                "receipt_notes": rec.receipt_notes if rec and rec.receipt_notes else "—",
+            },
+        }
+        html = report_service.generate_receiving_report_html(report_data)
+        dest, _ = QFileDialog.getSaveFileName(
+            self, "حفظ محضر الاستلام كملف HTML / PDF",
+            f"محضر_استلام_{eq.asset_number}.html"
+        )
         if dest:
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(html)
-            QMessageBox.information(self, "نجاح", "تم حفظ محضر الاستلام وجاهز للطباعة.")
+            QMessageBox.information(self, "نجاح", "تم حفظ محضر الاستلام بالتنسيق العربي الموحد، وهو جاهز للطباعة.")
             QDesktopServices.openUrl(QUrl.fromLocalFile(dest))
 
     # ── Tab 6: Work Orders ───────────────────────────────────────────────────
@@ -859,7 +865,11 @@ class EquipmentDetailsDialog(QDialog):
             html = report_service.generate_equipment_history_html(data)
 
             printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
-            printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+            orientation = report_service.get_page_orientation(data)
+            printer.setPageOrientation(
+                QPageLayout.Orientation.Landscape if orientation == "landscape"
+                else QPageLayout.Orientation.Portrait
+            )
             printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
             printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout.Unit.Millimeter)
 
