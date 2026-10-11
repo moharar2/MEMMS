@@ -73,6 +73,19 @@ def test_report_templates_share_a4_rtl_layout_and_escape_values():
 
 
 
+def test_receiving_report_uses_shared_arabic_rtl_template():
+    html = report_service.generate_receiving_report_html({
+        "equipment": {"name_ar": "جهاز اختبار", "asset_number": "EQ-RTL-01"},
+        "receiving": {"receipt_notes": "<ملاحظة> & بيانات"}
+    })
+    assert '<html dir="rtl" lang="ar">' in html
+    assert "محضر استلام وتعميد جهاز طبي" in html
+    assert "@page { size: A4 portrait;" in html
+    assert "&lt;ملاحظة&gt; &amp; بيانات" in html
+    assert "توقيع" in html
+
+
+
 def test_reports_rtl_layout(tmp_path):
     with get_db() as db:
         eq_data = report_service.get_equipment_report_data(db)
