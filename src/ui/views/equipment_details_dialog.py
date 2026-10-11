@@ -859,7 +859,11 @@ class EquipmentDetailsDialog(QDialog):
             html = report_service.generate_equipment_history_html(data)
 
             printer = QPrinter(QPrinter.PrinterMode.ScreenResolution)
-            printer.setPageOrientation(QPageLayout.Orientation.Portrait)
+            orientation = report_service.get_page_orientation(data)
+            printer.setPageOrientation(
+                QPageLayout.Orientation.Landscape if orientation == "landscape"
+                else QPageLayout.Orientation.Portrait
+            )
             printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
             printer.setPageMargins(QMarginsF(8, 8, 8, 8), QPageLayout.Unit.Millimeter)
 
