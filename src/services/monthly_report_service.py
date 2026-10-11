@@ -128,7 +128,11 @@ class MonthlyReportService:
                 _app = QApplication.instance() or QApplication([])
                 writer = QPdfWriter(str(pdf_path))
                 writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
-                writer.setPageOrientation(QPageLayout.Orientation.Landscape)
+                orientation = report_service.get_page_orientation(report_data)
+                writer.setPageOrientation(
+                    QPageLayout.Orientation.Landscape if orientation == "landscape"
+                    else QPageLayout.Orientation.Portrait
+                )
                 writer.setPageMargins(QMarginsF(10, 10, 10, 10), QPageLayout.Unit.Millimeter)
                 writer.setResolution(96)
 
