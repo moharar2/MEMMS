@@ -1126,6 +1126,30 @@ h2.section {{ direction: rtl; text-align: right; background: #E8F4F2; color: #11
         content = summary_html + self._html_table(headers, table_rows)
         return self._html_document(title, content, report_data)
 
+    def generate_receiving_report_html(self, report_data: Dict[str, Any]) -> str:
+        """Generate the receiving/commissioning record with the shared Arabic RTL report design."""
+        eq = report_data.get("equipment", {})
+        rec = report_data.get("receiving", {})
+        content = '<h2 class="section">أولًا: بيانات الجهاز الطبي</h2>'
+        content += self._html_info_table([
+            ("اسم الجهاز", eq.get("name_ar")), ("رقم الأصل", eq.get("asset_number")),
+            ("الموديل", eq.get("model")), ("الرقم التسلسلي", eq.get("serial_number")),
+            ("القسم الطبي", eq.get("department")), ("الشركة المصنعة", eq.get("manufacturer"))
+        ])
+        content += '<h2 class="section">ثانيًا: بيانات الاستلام والتعميد</h2>'
+        content += self._html_info_table([
+            ("رقم التعميد", rec.get("commissioning_number")), ("تاريخ التعميد", rec.get("commissioning_date")),
+            ("تاريخ استلام الجهاز", rec.get("receipt_date")), ("رقم محضر الاستلام", rec.get("receipt_report_number")),
+            ("فني الاستلام", rec.get("receiving_technician_name")), ("مسؤول التسجيل", rec.get("registration_officer_name")),
+            ("تاريخ التسجيل", rec.get("registration_date")), ("ملاحظات الاستلام", rec.get("receipt_notes"))
+        ])
+        content += """<table class="signatures" dir="rtl"><tbody><tr>
+<td><strong>فني الاستلام</strong><br><br>الاسم والتوقيع: ........................</td>
+<td><strong>مسؤول تسجيل الجهاز</strong><br><br>الاسم والتوقيع: ........................</td>
+<td><strong>رئيس القسم الهندسي</strong><br><br>الاعتماد والختم: ........................</td>
+</tr></tbody></table>"""
+        return self._html_document("محضر استلام وتعميد جهاز طبي", content, report_data)
+
     # ── 8. Single Equipment Maintenance History Report ───────────────────────
     def get_equipment_history_report_data(self, db: Session, equipment_id: int) -> Dict[str, Any]:
         """Gathers full lifecycle maintenance history for a single medical asset."""
